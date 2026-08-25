@@ -1,0 +1,111 @@
+# ============================================================
+# 1. Название workflow
+# ============================================================
+name: Build, Push and Deploy
+
+# ============================================================
+# 2. Триггеры
+# ============================================================
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+# ============================================================
+# 3. Переменные окружения
+# ============================================================
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+# ============================================================
+# 4. Задания
+# ============================================================
+jobs:
+
+  # ------------------------------------------
+  # ЗАДАНИЕ 1: Сборка и публикация Docker-образа
+  # ------------------------------------------
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+
+    - name: 📥 Checkout code
+      uses: actions/checkout@v4
+
+    - name: 🔑 Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: 🏷️ Extract Docker metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          # Для develop → :develop, для main → :latest и :main
+          type=ref,event=branch
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=sha,prefix=,format=short
+
+    - name: 🐳 Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    # ------------------------------------------
+    # 🔥 НОВЫЙ ШАГ: Отправка webhook на сервер
+    # ------------------------------------------
+    - name: 🚀 Send webhook to server
+      if: github.event_name != 'pull_request'
+      run: |
+        # Определяем, какая ветка и какой порт
+        if [[ "${{ github.ref_name }}" == "develop" ]]; then
+          BRANCH="develop"
+          DEPLOY_PATH="/home/${{ secrets.SERVER_USER }}/docker_dev"
+          PORT="8000"
+        elif [[ "${{ github.ref_name }}" == "main" ]]; then
+          BRANCH="main"
+          DEPLOY_PATH="/home/${{ secrets.SERVER_USER }}/docker_prod"
+          PORT="8001"
+        else
+          echo "⚠️ Неизвестная ветка: ${{ github.ref_name }}"
+          exit 0
+        fi
+
+        # Формируем полное имя образа
+        IMAGE_FULL="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$BRANCH"
+
+        echo "📦 Отправляем webhook для ветки $BRANCH"
+        echo "   Образ: $IMAGE_FULL"
+        echo "   Путь: $DEPLOY_PATH"
+        echo "   Порт: $PORT"
+
+        # Отправляем POST-запрос на сервер
+        curl -X POST \
+          -H "Content-Type: application/json" \
+          -d '{
+            "branch": "'"$BRANCH"'",
+            "image": "'"$IMAGE_FULL"'",
+            "deploy_path": "'"$DEPLOY_PATH"'",
+            "port": '"$PORT"',
+            "commit": "'"${{ github.sha }}"'"
+          }' \
+          http://${{ secrets.SERVER_HOST }}:${{ secrets.SERVER_PORT }}/webhook
+
+        echo "✅ Webhook отправлен!"

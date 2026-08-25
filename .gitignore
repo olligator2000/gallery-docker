@@ -1,0 +1,52 @@
+# Базовые игнорирования для Python-проектов
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Игнорирование для Django
+*.log
+*.pot
+*.pyc
+__pycache__/
+media/
+*.sqlite3
+db.sqlite3-journal
+
+# Игнорирование для IDE
+.idea/
+*.iml
+.vscode/
+
+# Игнорирование для виртуального окружения
+venv/
+env/
+.venv/
+
+# Игнорирование для системы контроля версий
+.DS_Store
+*.swp
+*.swo
+*.swn
+
+# Игнорирование для статических файлов (если они генерируются)
+staticfiles/
+
+# Игнорирование для временных файлов
+*.bak
+*.tmp
+*.orig
+*~
+
+# Игнорирование для логов
+logs/
+*.log
+
+# Дополнительные полезные игнорирования
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
+
+# ВАЖНО: requirements.txt НЕ ИГЛОРИРУЕМ!
+# requirements.txt
