@@ -16,9 +16,8 @@ on:
 # 3. Переменные окружения
 # ============================================================
 env:
-  DOCKER_BUILDKIT: 1
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  REGISTRY: docker.io
+  IMAGE_NAME: olligator2000/gallery-docker
 
 # ============================================================
 # 4. Задания
