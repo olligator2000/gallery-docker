@@ -53,7 +53,6 @@ jobs:
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         tags: |
-          # Для develop → :develop, для main → :latest и :main
           type=ref,event=branch
           type=raw,value=latest,enable={{is_default_branch}}
           type=sha,prefix=,format=short
@@ -65,11 +64,9 @@ jobs:
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        #cache-from: type=gha
-        #cache-to: type=gha,mode=max
 
     # ------------------------------------------
-    # 🔥 НОВЫЙ ШАГ: Отправка webhook на сервер
+    # 🚀 Отправка webhook на сервер
     # ------------------------------------------
     - name: 🚀 Send webhook to server
       if: github.event_name != 'pull_request'
@@ -79,17 +76,19 @@ jobs:
           BRANCH="develop"
           DEPLOY_PATH="/home/${{ secrets.SERVER_USER }}/docker_dev"
           PORT="8000"
+          IMAGE_TAG="develop"
         elif [[ "${{ github.ref_name }}" == "main" ]]; then
           BRANCH="main"
           DEPLOY_PATH="/home/${{ secrets.SERVER_USER }}/docker_prod"
           PORT="8001"
+          IMAGE_TAG="latest"
         else
           echo "⚠️ Неизвестная ветка: ${{ github.ref_name }}"
           exit 0
         fi
 
-        # Формируем полное имя образа
-        IMAGE_FULL="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$BRANCH"
+        # Формируем полное имя образа (для main используем latest)
+        IMAGE_FULL="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
 
         echo "📦 Отправляем webhook для ветки $BRANCH"
         echo "   Образ: $IMAGE_FULL"
@@ -110,42 +109,79 @@ jobs:
 
         echo "✅ Webhook отправлен!"
 
-
     # ------------------------------------------
     # 📨 Отправка уведомления в Telegram
     # ------------------------------------------
     - name: 📨 Send Telegram notification
       if: always()
       run: |
-        if [[ "${{ github.ref_name }}" == "develop" ]]; then
-          PORT="8000"
-          ENV="🟡 Staging"
-        elif [[ "${{ github.ref_name }}" == "main" ]]; then
-          PORT="8001"
-          ENV="🟢 Production"
-        else
-          PORT="unknown"
-          ENV="🔵 Unknown"
-        fi
-
         if [[ "${{ job.status }}" == "success" ]]; then
           STATUS="✅ УСПЕШНО"
+          EMOJI="✅"
         else
           STATUS="❌ ОШИБКА"
+          EMOJI="❌"
         fi
 
+        if [[ "${{ github.ref_name }}" == "develop" ]]; then
+          ENV="🟡 STAGING"
+          PORT="8000"
+        elif [[ "${{ github.ref_name }}" == "main" ]]; then
+          ENV="🟢 PRODUCTION"
+          PORT="8001"
+        else
+          ENV="🔵 UNKNOWN"
+          PORT="?"
+        fi
+
+        HOST="${{ secrets.SERVER_HOST }}"
+
         MESSAGE="
-        *${STATUS}* ${ENV}
-        
+        ${EMOJI} *Деплой ${STATUS}* ${ENV}
+
         📦 *Проект:* gallery-docker
         🌿 *Ветка:* ${{ github.ref_name }}
         🔗 *Коммит:* ${{ github.sha }}
         👤 *Автор:* ${{ github.actor }}
         🚪 *Порт:* ${PORT}
+        🌐 *Ссылка:* http://${HOST}:${PORT}
         🕐 *Время:* $(date '+%Y-%m-%d %H:%M:%S')
         "
 
-        # Отправляем в Telegram
+        curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+          -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+          -d text="$MESSAGE" \
+          -d parse_mode="Markdown"
+
+    # ------------------------------------------
+    # 🩺 Проверка healthcheck и отправка в Telegram
+    # ------------------------------------------
+    - name: 🩺 Check health and send to Telegram
+      if: success()
+      run: |
+        # Ждём 5 секунд, чтобы контейнер успел запуститься
+        sleep 5
+
+        # Проверяем статус healthcheck через SSH
+        HEALTH=$(ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+          "docker inspect --format='{{.State.Health.Status}}' gallery-${{ github.ref_name }} 2>/dev/null || echo 'unknown'")
+
+        if [[ "$HEALTH" == "healthy" ]]; then
+          STATUS_EMOJI="🟢"
+        elif [[ "$HEALTH" == "unhealthy" ]]; then
+          STATUS_EMOJI="🔴"
+        else
+          STATUS_EMOJI="🟡"
+        fi
+
+        MESSAGE="
+        ${STATUS_EMOJI} *Healthcheck для gallery-${{ github.ref_name }}*
+
+        📊 *Статус:* ${HEALTH}
+        🌿 *Ветка:* ${{ github.ref_name }}
+        🕐 *Время:* $(date '+%Y-%m-%d %H:%M:%S')
+        "
+
         curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
           -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
           -d text="$MESSAGE" \
