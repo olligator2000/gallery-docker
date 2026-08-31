@@ -109,3 +109,36 @@ jobs:
           http://${{ secrets.SERVER_HOST }}:${{ secrets.SERVER_PORT }}/webhook
 
         echo "✅ Webhook отправлен!"
+
+
+    # ------------------------------------------
+    # 📨 Отправка уведомления в Telegram
+    # ------------------------------------------
+    - name: 📨 Send Telegram notification
+      if: always()  # Отправляет даже при ошибке
+      run: |
+        # Определяем статус деплоя
+        if [[ "${{ job.status }}" == "success" ]]; then
+          STATUS="✅ Успешно"
+          EMOJI="✅"
+        else
+          STATUS="❌ Ошибка"
+          EMOJI="❌"
+        fi
+
+        # Формируем сообщение
+        MESSAGE="
+        ${EMOJI} *Деплой ${STATUS}*
+        
+        📦 *Проект:* gallery-docker
+        🌿 *Ветка:* ${{ github.ref_name }}
+        🔗 *Коммит:* ${{ github.sha }}
+        👤 *Автор:* ${{ github.actor }}
+        🕐 *Время:* $(date '+%Y-%m-%d %H:%M:%S')
+        "
+
+        # Отправляем в Telegram
+        curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+          -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+          -d text="$MESSAGE" \
+          -d parse_mode="Markdown"
