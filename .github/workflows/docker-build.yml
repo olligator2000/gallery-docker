@@ -115,25 +115,33 @@ jobs:
     # 📨 Отправка уведомления в Telegram
     # ------------------------------------------
     - name: 📨 Send Telegram notification
-      if: always()  # Отправляет даже при ошибке
+      if: always()
       run: |
-        # Определяем статус деплоя
-        if [[ "${{ job.status }}" == "success" ]]; then
-          STATUS="✅ Успешно"
-          EMOJI="✅"
+        if [[ "${{ github.ref_name }}" == "develop" ]]; then
+          PORT="8000"
+          ENV="🟡 Staging"
+        elif [[ "${{ github.ref_name }}" == "main" ]]; then
+          PORT="8001"
+          ENV="🟢 Production"
         else
-          STATUS="❌ Ошибка"
-          EMOJI="❌"
+          PORT="unknown"
+          ENV="🔵 Unknown"
         fi
 
-        # Формируем сообщение
+        if [[ "${{ job.status }}" == "success" ]]; then
+          STATUS="✅ УСПЕШНО"
+        else
+          STATUS="❌ ОШИБКА"
+        fi
+
         MESSAGE="
-        ${EMOJI} *Деплой ${STATUS}*
+        *${STATUS}* ${ENV}
         
         📦 *Проект:* gallery-docker
         🌿 *Ветка:* ${{ github.ref_name }}
         🔗 *Коммит:* ${{ github.sha }}
         👤 *Автор:* ${{ github.actor }}
+        🚪 *Порт:* ${PORT}
         🕐 *Время:* $(date '+%Y-%m-%d %H:%M:%S')
         "
 
