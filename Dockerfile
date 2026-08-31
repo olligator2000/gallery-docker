@@ -5,6 +5,9 @@ FROM python:3.10-slim
 # Все команды будут выполняться из папки /app
 WORKDIR /app
 
+# Устанавливаем curl для healthcheck
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 # Копируем файл requirements.txt с хоста в контейнер
 # (сначала копируем только зависимости, чтобы использовать кэширование Docker)
 COPY requirements.txt .
@@ -21,3 +24,9 @@ COPY . .
 # Команда, которая выполняется при запуске контейнера
 # Запускаем встроенный Django-сервер на всех интерфейсах (0.0.0.0)
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+
+# ============================================================
+# Добавляем Healthcheck для Django
+# ============================================================
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:8000/ || exit 1
