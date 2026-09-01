@@ -71,39 +71,42 @@ jobs:
     - name: 🚀 Send webhook to server
       if: github.event_name != 'pull_request'
       run: |
+        # Определяем, какая ветка и какой внутренний порт
         if [[ "${{ github.ref_name }}" == "develop" ]]; then
           BRANCH="develop"
           DEPLOY_PATH="/home/${{ secrets.SERVER_USER }}/docker_dev"
-          PORT="8000"
+          INTERNAL_PORT="8000"          # ← Порт внутри сервера
           IMAGE_TAG="develop"
         elif [[ "${{ github.ref_name }}" == "main" ]]; then
           BRANCH="main"
           DEPLOY_PATH="/home/${{ secrets.SERVER_USER }}/docker_prod"
-          PORT="8001"
+          INTERNAL_PORT="8001"          # ← Порт внутри сервера
           IMAGE_TAG="latest"
         else
           echo "⚠️ Неизвестная ветка: ${{ github.ref_name }}"
           exit 0
         fi
-
+    
+        # Формируем полное имя образа
         IMAGE_FULL="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
-
+    
         echo "📦 Отправляем webhook для ветки $BRANCH"
         echo "   Образ: $IMAGE_FULL"
         echo "   Путь: $DEPLOY_PATH"
-        echo "   Порт: $PORT"
-
+        echo "   Порт: $INTERNAL_PORT"   # ← Теперь правильно!
+    
+        # Отправляем POST-запрос на сервер
         curl -X POST \
           -H "Content-Type: application/json" \
           -d '{
             "branch": "'"$BRANCH"'",
             "image": "'"$IMAGE_FULL"'",
             "deploy_path": "'"$DEPLOY_PATH"'",
-            "port": '"$PORT"',
+            "port": '"$INTERNAL_PORT"',
             "commit": "'"${{ github.sha }}"'"
           }' \
           http://${{ secrets.SERVER_HOST }}:${{ secrets.SERVER_PORT }}/webhook
-
+    
         echo "✅ Webhook отправлен!"
 
     # ------------------------------------------
@@ -119,8 +122,7 @@ jobs:
           STATUS="❌ ОШИБКА"
           EMOJI="❌"
         fi
-
-        # Определяем ВНЕШНИЙ порт для ссылки
+    
         if [[ "${{ github.ref_name }}" == "develop" ]]; then
           ENV="🟡 STAGING"
           EXTERNAL_PORT="38000"
@@ -131,12 +133,12 @@ jobs:
           ENV="🔵 UNKNOWN"
           EXTERNAL_PORT="?"
         fi
-
+    
         HOST="s1.moloko62.ru"
-
+    
         MESSAGE="
         ${EMOJI} *Деплой ${STATUS}* ${ENV}
-
+    
         📦 *Проект:* gallery-docker
         🌿 *Ветка:* ${{ github.ref_name }}
         🔗 *Коммит:* ${{ github.sha }}
@@ -144,7 +146,7 @@ jobs:
         🌐 *Ссылка:* http://${HOST}:${EXTERNAL_PORT}
         🕐 *Время:* $(date '+%Y-%m-%d %H:%M:%S')
         "
-
+    
         curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
           -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
           -d text="$MESSAGE" \
@@ -156,7 +158,6 @@ jobs:
     - name: 🩺 Check health via HTTP
       if: success()
       run: |
-        # Определяем ВНЕШНИЙ порт для проверки
         if [[ "${{ github.ref_name }}" == "develop" ]]; then
           EXTERNAL_PORT="38000"
         elif [[ "${{ github.ref_name }}" == "main" ]]; then
@@ -164,11 +165,11 @@ jobs:
         else
           EXTERNAL_PORT="8000"
         fi
-
+    
         sleep 5
-
+    
         HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://s1.moloko62.ru:${EXTERNAL_PORT} || echo "000")
-
+    
         if [[ "$HTTP_CODE" == "200" ]]; then
           STATUS_EMOJI="🟢"
           STATUS="healthy ✅ (HTTP 200)"
@@ -179,16 +180,16 @@ jobs:
           STATUS_EMOJI="🟡"
           STATUS="⚠️ странный ответ (HTTP ${HTTP_CODE})"
         fi
-
+    
         MESSAGE="
         ${STATUS_EMOJI} *Healthcheck для gallery-${{ github.ref_name }}*
-
+    
         📊 *Статус:* ${STATUS}
         🌿 *Ветка:* ${{ github.ref_name }}
         🌐 *Ссылка:* http://s1.moloko62.ru:${EXTERNAL_PORT}
         🕐 *Время:* $(date '+%Y-%m-%d %H:%M:%S')
         "
-
+    
         curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
           -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
           -d text="$MESSAGE" \
