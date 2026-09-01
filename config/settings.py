@@ -58,14 +58,14 @@ else:
 # 5. ALLOWED_HOSTS (с поддержкой .env)
 # ============================================================
 if USE_ENVIRON:
-    ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['192.168.1.171', 'localhost', '127.0.0.1', '0.0.0.0'])
+    ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=['192.168.1.171', 'localhost', '127.0.0.1', '0.0.0.0', '*'])
 else:
     ALLOWED_HOSTS = [
         '192.168.1.171',
         'localhost',
         '127.0.0.1',
-        '0.0.0.0',
-        '*'  # для всех интерфейсов
+        '0.0.0.0'
+        '*',
     ]
 
 

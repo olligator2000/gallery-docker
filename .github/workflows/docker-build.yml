@@ -53,7 +53,6 @@ jobs:
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
         tags: |
-          # Для develop → :develop, для main → :latest и :main
           type=ref,event=branch
           type=raw,value=latest,enable={{is_default_branch}}
           type=sha,prefix=,format=short
@@ -65,37 +64,37 @@ jobs:
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        #cache-from: type=gha
-        #cache-to: type=gha,mode=max
 
     # ------------------------------------------
-    # 🔥 НОВЫЙ ШАГ: Отправка webhook на сервер
+    # 🚀 Отправка webhook на сервер
     # ------------------------------------------
     - name: 🚀 Send webhook to server
       if: github.event_name != 'pull_request'
       run: |
-        # Определяем, какая ветка и какой порт
+        # Определяем, какая ветка и какой внутренний порт
         if [[ "${{ github.ref_name }}" == "develop" ]]; then
           BRANCH="develop"
           DEPLOY_PATH="/home/${{ secrets.SERVER_USER }}/docker_dev"
-          PORT="8000"
+          INTERNAL_PORT="8000"          # ← Порт внутри сервера
+          IMAGE_TAG="develop"
         elif [[ "${{ github.ref_name }}" == "main" ]]; then
           BRANCH="main"
           DEPLOY_PATH="/home/${{ secrets.SERVER_USER }}/docker_prod"
-          PORT="8001"
+          INTERNAL_PORT="8001"          # ← Порт внутри сервера
+          IMAGE_TAG="latest"
         else
           echo "⚠️ Неизвестная ветка: ${{ github.ref_name }}"
           exit 0
         fi
-
+    
         # Формируем полное имя образа
-        IMAGE_FULL="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$BRANCH"
-
+        IMAGE_FULL="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${IMAGE_TAG}"
+    
         echo "📦 Отправляем webhook для ветки $BRANCH"
         echo "   Образ: $IMAGE_FULL"
         echo "   Путь: $DEPLOY_PATH"
-        echo "   Порт: $PORT"
-
+        echo "   Порт: $INTERNAL_PORT"   # ← Теперь правильно!
+    
         # Отправляем POST-запрос на сервер
         curl -X POST \
           -H "Content-Type: application/json" \
@@ -103,13 +102,12 @@ jobs:
             "branch": "'"$BRANCH"'",
             "image": "'"$IMAGE_FULL"'",
             "deploy_path": "'"$DEPLOY_PATH"'",
-            "port": '"$PORT"',
+            "port": '"$INTERNAL_PORT"',
             "commit": "'"${{ github.sha }}"'"
           }' \
           http://${{ secrets.SERVER_HOST }}:${{ secrets.SERVER_PORT }}/webhook
-
+    
         echo "✅ Webhook отправлен!"
-
 
     # ------------------------------------------
     # 📨 Отправка уведомления в Telegram
@@ -117,35 +115,81 @@ jobs:
     - name: 📨 Send Telegram notification
       if: always()
       run: |
-        if [[ "${{ github.ref_name }}" == "develop" ]]; then
-          PORT="8000"
-          ENV="🟡 Staging"
-        elif [[ "${{ github.ref_name }}" == "main" ]]; then
-          PORT="8001"
-          ENV="🟢 Production"
-        else
-          PORT="unknown"
-          ENV="🔵 Unknown"
-        fi
-
         if [[ "${{ job.status }}" == "success" ]]; then
           STATUS="✅ УСПЕШНО"
+          EMOJI="✅"
         else
           STATUS="❌ ОШИБКА"
+          EMOJI="❌"
         fi
-
+    
+        if [[ "${{ github.ref_name }}" == "develop" ]]; then
+          ENV="🟡 STAGING"
+          EXTERNAL_PORT="38000"
+        elif [[ "${{ github.ref_name }}" == "main" ]]; then
+          ENV="🟢 PRODUCTION"
+          EXTERNAL_PORT="38001"
+        else
+          ENV="🔵 UNKNOWN"
+          EXTERNAL_PORT="?"
+        fi
+    
+        HOST="s1.moloko62.ru"
+    
         MESSAGE="
-        *${STATUS}* ${ENV}
-        
+        ${EMOJI} *Деплой ${STATUS}* ${ENV}
+    
         📦 *Проект:* gallery-docker
         🌿 *Ветка:* ${{ github.ref_name }}
         🔗 *Коммит:* ${{ github.sha }}
         👤 *Автор:* ${{ github.actor }}
-        🚪 *Порт:* ${PORT}
+        🌐 *Ссылка:* http://${HOST}:${EXTERNAL_PORT}
         🕐 *Время:* $(date '+%Y-%m-%d %H:%M:%S')
         "
+    
+        curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+          -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+          -d text="$MESSAGE" \
+          -d parse_mode="Markdown"
 
-        # Отправляем в Telegram
+    # ------------------------------------------
+    # 🩺 Проверка healthcheck через HTTP
+    # ------------------------------------------
+    - name: 🩺 Check health via HTTP
+      if: success()
+      run: |
+        if [[ "${{ github.ref_name }}" == "develop" ]]; then
+          EXTERNAL_PORT="38000"
+        elif [[ "${{ github.ref_name }}" == "main" ]]; then
+          EXTERNAL_PORT="38001"
+        else
+          EXTERNAL_PORT="8000"
+        fi
+    
+        sleep 5
+    
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://s1.moloko62.ru:${EXTERNAL_PORT}/ || echo "000")
+    
+        if [[ "$HTTP_CODE" == "200" ]]; then
+          STATUS_EMOJI="🟢"
+          STATUS="healthy ✅ (HTTP 200)"
+        elif [[ "$HTTP_CODE" == "000" ]]; then
+          STATUS_EMOJI="🔴"
+          STATUS="unhealthy ❌ (контейнер не отвечает)"
+        else
+          STATUS_EMOJI="🟡"
+          STATUS="⚠️ странный ответ (HTTP ${HTTP_CODE})"
+        fi
+    
+        MESSAGE="
+        ${STATUS_EMOJI} *Healthcheck для gallery-${{ github.ref_name }}*
+    
+        📊 *Статус:* ${STATUS}
+        🌿 *Ветка:* ${{ github.ref_name }}
+        🌐 *Ссылка:* http://s1.moloko62.ru:${EXTERNAL_PORT}
+        🕐 *Время:* $(date '+%Y-%m-%d %H:%M:%S')
+        "
+    
         curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
           -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
           -d text="$MESSAGE" \
