@@ -24,6 +24,9 @@ COPY . .
 # Загружаем начальные данные (фикстуры)
 RUN python manage.py loaddata fixtures/initial_data.json || true
 
+# Загружаем миграции
+RUN python manage.py migrate
+
 # Команда, которая выполняется при запуске контейнера
 # Запускаем встроенный Django-сервер на всех интерфейсах (0.0.0.0)
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
