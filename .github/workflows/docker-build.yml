@@ -154,31 +154,43 @@ jobs:
           -d parse_mode="Markdown"
 
     # ------------------------------------------
-    # 🩺 Проверка healthcheck и отправка в Telegram
+    # 🩺 Проверка healthcheck через HTTP (без SSH)
     # ------------------------------------------
-    - name: 🩺 Check health and send to Telegram
+    - name: 🩺 Check health via HTTP
       if: success()
       run: |
+        # Определяем порт для проверки (внутренний)
+        if [[ "${{ github.ref_name }}" == "develop" ]]; then
+          PORT="8000"
+        elif [[ "${{ github.ref_name }}" == "main" ]]; then
+          PORT="8001"
+        else
+          PORT="8000"
+        fi
+
         # Ждём 5 секунд, чтобы контейнер успел запуститься
         sleep 5
 
-        # Проверяем статус healthcheck через SSH
-        HEALTH=$(ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-          "docker inspect --format='{{.State.Health.Status}}' gallery-${{ github.ref_name }} 2>/dev/null || echo 'unknown'")
+        # Проверяем HTTP-статус сайта (через localhost, потому что скрипт выполняется на сервере)
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${PORT} || echo "000")
 
-        if [[ "$HEALTH" == "healthy" ]]; then
+        if [[ "$HTTP_CODE" == "200" ]]; then
           STATUS_EMOJI="🟢"
-        elif [[ "$HEALTH" == "unhealthy" ]]; then
+          STATUS="healthy ✅ (HTTP 200)"
+        elif [[ "$HTTP_CODE" == "000" ]]; then
           STATUS_EMOJI="🔴"
+          STATUS="unhealthy ❌ (контейнер не отвечает)"
         else
           STATUS_EMOJI="🟡"
+          STATUS="⚠️ странный ответ (HTTP ${HTTP_CODE})"
         fi
 
         MESSAGE="
         ${STATUS_EMOJI} *Healthcheck для gallery-${{ github.ref_name }}*
 
-        📊 *Статус:* ${HEALTH}
+        📊 *Статус:* ${STATUS}
         🌿 *Ветка:* ${{ github.ref_name }}
+        🚪 *Порт:* ${PORT}
         🕐 *Время:* $(date '+%Y-%m-%d %H:%M:%S')
         "
 
