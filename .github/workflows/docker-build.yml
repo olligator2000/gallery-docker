@@ -171,9 +171,9 @@ jobs:
         # Ждём 5 секунд, чтобы контейнер успел запуститься
         sleep 5
 
-        # Проверяем HTTP-статус сайта (через localhost, потому что скрипт выполняется на сервере)
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${PORT} || echo "000")
-
+        # Проверяем HTTP-статус сайта через внешний адрес
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://s1.moloko62.ru:${EXTERNAL_PORT} || echo "000")
+    
         if [[ "$HTTP_CODE" == "200" ]]; then
           STATUS_EMOJI="🟢"
           STATUS="healthy ✅ (HTTP 200)"
@@ -184,16 +184,16 @@ jobs:
           STATUS_EMOJI="🟡"
           STATUS="⚠️ странный ответ (HTTP ${HTTP_CODE})"
         fi
-
+    
         MESSAGE="
         ${STATUS_EMOJI} *Healthcheck для gallery-${{ github.ref_name }}*
-
+    
         📊 *Статус:* ${STATUS}
         🌿 *Ветка:* ${{ github.ref_name }}
-        🚪 *Порт:* ${PORT}
+        🌐 *Ссылка:* http://s1.moloko62.ru:${EXTERNAL_PORT}
         🕐 *Время:* $(date '+%Y-%m-%d %H:%M:%S')
         "
-
+    
         curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
           -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
           -d text="$MESSAGE" \
