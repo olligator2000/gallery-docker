@@ -21,6 +21,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # /app — папка в контейнере, куда копируем
 COPY . .
 
+# Загружаем начальные данные (фикстуры)
+RUN python manage.py loaddata fixtures/initial_data.json || true
+
 # Команда, которая выполняется при запуске контейнера
 # Запускаем встроенный Django-сервер на всех интерфейсах (0.0.0.0)
 CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
