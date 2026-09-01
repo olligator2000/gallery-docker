@@ -168,7 +168,7 @@ jobs:
     
         sleep 5
     
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://s1.moloko62.ru:${EXTERNAL_PORT} || echo "000")
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://s1.moloko62.ru:${EXTERNAL_PORT}/ || echo "000")
     
         if [[ "$HTTP_CODE" == "200" ]]; then
           STATUS_EMOJI="🟢"
