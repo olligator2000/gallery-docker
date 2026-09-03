@@ -113,3 +113,25 @@ volumes:
 # ============================================================
 networks:
   gallery_network:
+
+# ============================================================
+# 7. NGINX — веб-сервер для статики и прокси
+# ============================================================
+nginx:
+  image: nginx:alpine
+  container_name: gallery-nginx
+  ports:
+    - "80:80"
+    - "443:443"
+  volumes:
+    - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    - /home/user/docker_dev/staticfiles:/staticfiles_staging      # Staging статика
+    - /home/user/docker_dev/media:/media_staging                  # Staging медиа
+    - /home/user/docker_prod/staticfiles:/staticfiles_prod        # Production статика
+    - /home/user/docker_prod/media:/media_prod                    # Production медиа
+  depends_on:
+    - web-staging
+    - web-production
+  restart: always
+  networks:
+    - gallery_network
