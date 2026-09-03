@@ -22,7 +22,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Загружаем начальные данные (фикстуры)
-RUN python manage.py loaddata fixtures/initial_data.json || true
+# RUN python manage.py loaddata fixtures/initial_data.json || true
+
 
 # Загружаем миграции
 RUN python manage.py migrate
