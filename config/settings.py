@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
 from pathlib import Path
+from decouple import config
 import os
 import sys
 
@@ -189,3 +190,23 @@ MAILERS = {
 # 12. Default primary key field type
 # ============================================================
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# ============================================================
+# 13. Для загрузки файлов (аватары, фото)
+# ============================================================
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+
+# ============================================================
+# 14. Редиректы после входа/выхода
+# ============================================================
+LOGIN_URL = '/accounts/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/'
+
+# ============================================================
+# 15. Кодировка
+# ============================================================
+DEFAULT_CHARSET = 'utf-8'
