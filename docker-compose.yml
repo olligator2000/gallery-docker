@@ -1,25 +1,139 @@
-# Версия формата docker-compose (современная, можно не указывать)
-# Но для совместимости пишем 3.8
+# ============================================================
+# ВЕРСИЯ ФОРМАТА DOCKER COMPOSE
+# ============================================================
 version: '3.8'
 
-# Описываем сервисы (контейнеры), которые будем запускать
+# ============================================================
+# ОПИСАНИЕ СЕРВИСОВ (все контейнеры, которые мы будем запускать)
+# ============================================================
 services:
-  # Название сервиса — web (будет доступен как хост внутри сети контейнеров)
-  web:
-    # Собирать образ из текущей папки (ищет Dockerfile)
-    build: .
 
-    # Пробрасываем порты: "порт_хоста:порт_контейнера"
-    # Порт 8000 на твоём ПК будет направлен на порт 8000 внутри контейнера
+  # ============================================================
+  # 1. ОБЩАЯ БАЗА ДАННЫХ (PostgreSQL) — одна на оба окружения
+  # ============================================================
+  db:
+    image: postgres:15                                      # Официальный образ PostgreSQL 15
+    container_name: gallery-db                              # Имя контейнера (чтобы к нему обращаться)
+    environment:                                            # Переменные окружения для PostgreSQL
+      POSTGRES_DB: gallery                                  # Название базы данных
+      POSTGRES_USER: gallery                                # Имя пользователя
+      POSTGRES_PASSWORD: gallerypass                        # Пароль пользователя
+    volumes:                                                # Том для сохранения данных
+      - postgres_data:/var/lib/postgresql/data              # Данные базы будут жить на сервере вне контейнера
+    restart: always                                         # Автоматически перезапускать, если упал
+    networks:
+      - gallery_network                                     # Подключаем к общей сети
+    healthcheck:                                             # Проверка, что база готова принимать запросы
+      test: ["CMD-SHELL", "pg_isready -U gallery"]          # Команда проверки
+      interval: 10s                                          # Проверять каждые 10 секунд
+      timeout: 5s                                            # Ждать ответ 5 секунд
+      retries: 5                                             # Попробовать 5 раз, прежде чем считать контейнер больным
+
+  # ============================================================
+  # 2. ОБЩИЙ КЕШ (Redis) — один на оба окружения
+  # ============================================================
+  redis:
+    image: redis:alpine                                     # Образ Redis на Alpine (лёгкий)
+    container_name: gallery-redis
+    restart: always
+    networks:
+      - gallery_network
+    healthcheck:                                             # Проверка, что Redis жив
+      test: ["CMD", "redis-cli", "ping"]                    # Просто пингуем Redis
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================
+  # 3. STAGING (ОКРУЖЕНИЕ ДЛЯ РАЗРАБОТКИ) — ВЕТКА develop
+  # ============================================================
+  web-staging:
+    image: ghcr.io/olligator2000/gallery-docker:develop     # Берём образ с тегом :develop из GitHub Container Registry
+    container_name: gallery-staging                          # Имя контейнера для Staging
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3  # Запускаем Gunicorn
     ports:
-      - "8000:8000"
-
-    # Монтируем текущую папку проекта внутрь контейнера
-    # Это позволяет менять код без пересборки образа
-    # . — текущая папка на хосте
-    # /app — папка внутри контейнера, куда монтируем
+      - "8000:8000"                                          # Пробрасываем порт: внешний 8000 → внутренний 8000
+    depends_on:                                              # Ждём, пока запустятся БД и Redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:                                             # Переменные для подключения к БД и Redis
+      USE_POSTGRES: "true"                                   # Говорим Django, что используем PostgreSQL
+      DB_NAME: gallery
+      DB_USER: gallery
+      DB_PASSWORD: gallerypass
+      DB_HOST: db                                            # Имя хоста = имя контейнера с БД
+      DB_PORT: 5432
+      REDIS_URL: redis://redis:6379/1                        # Адрес Redis
     volumes:
-      - .:/app
+      - /home/user/docker_dev/media:/app/media               # Монтируем папку с фото Staging
+      - /home/user/docker_dev/staticfiles:/app/staticfiles   # Монтируем собранную статику Staging
+    restart: always                                          # Автоматический перезапуск
+    networks:
+      - gallery_network                                      # Подключаем к общей сети
 
-    # (Опционально) Команда запуска — если не указана, используется CMD из Dockerfile
-    # command: python manage.py runserver 0.0.0.0:8000
+  # ============================================================
+  # 4. PRODUCTION (ПРОДАКШЕН) — ВЕТКА main
+  # ============================================================
+  web-production:
+    image: ghcr.io/olligator2000/gallery-docker:latest      # Берём образ с тегом :latest (продакшн)
+    container_name: gallery-production                       # Имя контейнера для Production
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3
+    ports:
+      - "8001:8000"                                          # ПРОДАКШЕН НА ПОРТУ 8001 (чтобы не конфликтовать с Staging)
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      USE_POSTGRES: "true"
+      DB_NAME: gallery
+      DB_USER: gallery
+      DB_PASSWORD: gallerypass
+      DB_HOST: db
+      DB_PORT: 5432
+      REDIS_URL: redis://redis:6379/1
+    volumes:
+      - /home/user/docker_prod/media:/app/media              # Монтируем папку с фото Production
+      - /home/user/docker_prod/staticfiles:/app/staticfiles  # Монтируем собранную статику Production
+    restart: always
+    networks:
+      - gallery_network
+
+
+  # ============================================================
+  # 5. NGINX — веб-сервер для статики и прокси
+  # ============================================================
+  nginx:
+    image: nginx:alpine
+    container_name: gallery-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /home/user/docker_dev/staticfiles:/staticfiles_staging      # Staging статика
+      - /home/user/docker_dev/media:/media_staging                  # Staging медиа
+      - /home/user/docker_prod/staticfiles:/staticfiles_prod        # Production статика
+      - /home/user/docker_prod/media:/media_prod                    # Production медиа
+    depends_on:
+      - web-staging
+      - web-production
+    restart: always
+    networks:
+      - gallery_network
+
+
+# ============================================================
+# 6. ТОМА ДЛЯ ХРАНЕНИЯ ДАННЫХ (живут на сервере, вне контейнеров)
+# ============================================================
+volumes:
+  postgres_data:                                             # Том для PostgreSQL (общий для всех)
+
+# ============================================================
+# 7. ВНУТРЕННЯЯ СЕТЬ (чтобы контейнеры видели друг друга по имени)
+# ============================================================
+networks:
+  gallery_network:
