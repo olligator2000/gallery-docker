@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    io.kompose.service: web-staging
+  name: web-staging
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      io.kompose.service: web-staging
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        io.kompose.service: web-staging
+    spec:
+      imagePullSecrets:
+      - name: ghcr-secret
+      containers:
+        - args:
+            - gunicorn
+            - config.wsgi:application
+            - --bind
+            - 0.0.0.0:8000
+            - --workers
+            - "3"
+          env:
+            - name: DB_HOST
+              value: db
+            - name: DB_NAME
+              value: gallery
+            - name: DB_PASSWORD
+              value: gallerypass
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: gallery
+            - name: REDIS_URL
+              value: redis://redis:6379/1
+            - name: USE_POSTGRES
+              value: "true"
+          image: ghcr.io/olligator2000/gallery-docker:develop
+          imagePullPolicy: Always
+          name: gallery-staging
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      restartPolicy: Always

@@ -85,6 +85,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -210,3 +211,29 @@ LOGOUT_REDIRECT_URL = '/'
 # 15. Кодировка
 # ============================================================
 DEFAULT_CHARSET = 'utf-8'
+
+# ============================================================
+# 16. STORAGES
+# ============================================================
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
+# ============================================================
+# 17. CACHES
+# ============================================================
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": os.getenv("VALKEY_URL", "redis://valkey-primary.valkey.svc.cluster.local:6379/1"),
+        "OPTIONS": {
+            "PASSWORD": os.getenv("VALKEY_PASSWORD"),
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
+    }
+}

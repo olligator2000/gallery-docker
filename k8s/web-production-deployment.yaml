@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    io.kompose.service: web-production
+  name: web-production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      io.kompose.service: web-production
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        io.kompose.service: web-production
+    spec:
+      imagePullSecrets:
+      - name: ghcr-secret
+      containers:
+        - args:
+            - gunicorn
+            - config.wsgi:application
+            - --bind
+            - 0.0.0.0:8000
+            - --workers
+            - "3"
+          env:
+            - name: DB_HOST
+              value: db
+            - name: DB_NAME
+              value: gallery
+            - name: DB_PASSWORD
+              value: gallerypass
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: gallery
+            - name: REDIS_URL
+              value: redis://redis:6379/1
+            - name: USE_POSTGRES
+              value: "true"
+          image: ghcr.io/olligator2000/gallery-docker:v2
+          imagePullPolicy: Always
+          name: gallery-production
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+          volumeMounts:
+            - name: media-storage
+              mountPath: /app/media/
+              subPath: static/images
+            - name: avatars-storage
+              mountPath: /app/media/avatars
+              subPath: ""
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: media-storage
+          persistentVolumeClaim:
+            claimName: smb-media-pvc
+        - name: avatars-storage
+          persistentVolumeClaim:
+            claimName: smb-avatars-pvc
+      restartPolicy: Always

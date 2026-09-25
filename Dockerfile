@@ -26,7 +26,7 @@ COPY . .
 
 
 # Загружаем миграции
-RUN python manage.py migrate
+RUN python manage.py collectstatic --noinput
 
 # Команда, которая выполняется при запуске контейнера
 # Запускаем встроенный Django-сервер на всех интерфейсах (0.0.0.0)
