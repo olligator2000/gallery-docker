@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kompose.cmd: kompose convert -f docker-compose.yml -o ./k8s/
+    kompose.version: 1.38.0 (a8f5d1cbd)
+  labels:
+    io.kompose.service: nginx
+  name: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: nginx
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      annotations:
+        kompose.cmd: kompose convert -f docker-compose.yml -o ./k8s/
+        kompose.version: 1.38.0 (a8f5d1cbd)
+      labels:
+        io.kompose.service: nginx
+    spec:
+      containers:
+        - image: nginx:alpine
+          name: gallery-nginx
+          ports:
+            - containerPort: 80
+              protocol: TCP
+            - containerPort: 443
+              protocol: TCP
+          volumeMounts:
+            - mountPath: /etc/nginx/conf.d/default.conf
+              name: nginx-claim0
+              readOnly: true
+            - mountPath: /staticfiles_staging
+              name: nginx-claim1
+            - mountPath: /media_staging
+              name: nginx-claim2
+            - mountPath: /staticfiles_prod
+              name: nginx-claim3
+            - mountPath: /media_prod
+              name: nginx-claim4
+      restartPolicy: Always
+      volumes:
+        - name: nginx-claim0
+          persistentVolumeClaim:
+            claimName: nginx-claim0
+            readOnly: true
+        - name: nginx-claim1
+          persistentVolumeClaim:
+            claimName: nginx-claim1
+        - name: nginx-claim2
+          persistentVolumeClaim:
+            claimName: nginx-claim2
+        - name: nginx-claim3
+          persistentVolumeClaim:
+            claimName: nginx-claim3
+        - name: nginx-claim4
+          persistentVolumeClaim:
+            claimName: nginx-claim4

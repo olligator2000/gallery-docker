@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: smb-media-pvc
+spec:
+  accessModes:
+    - ReadWriteMany          # ← SMB даёт RWX, несколько подов могут читать/писать
+  resources:
+    requests:
+      storage: 10Gi          # ← размер "виртуальный", ограничивается самой шарой
+  storageClassName: smb-media

@@ -1,0 +1,19 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: smb-media
+provisioner: smb.csi.k8s.io
+parameters:
+  source: "//192.168.1.3/Media_TT"     # ← только шара, без \static\images
+  csi.storage.k8s.io/node-stage-secret-name: "smb-media-secret"
+  csi.storage.k8s.io/node-stage-secret-namespace: "default"
+  csi.storage.k8s.io/provisioner-secret-name: "smb-media-secret"
+  csi.storage.k8s.io/provisioner-secret-namespace: "default"
+reclaimPolicy: Retain
+volumeBindingMode: Immediate
+mountOptions:
+  - dir_mode=0777
+  - file_mode=0777
+  - uid=1001
+  - gid=1001
+  - vers=3.0
