@@ -13,7 +13,7 @@ spec:
     driver: smb.csi.k8s.io
     volumeHandle: smb-avatars-volume
     volumeAttributes:
-      source: "//192.168.1.3/Media_TT/media/avatars"
+      source: "//192.168.1.3/Media_TT/media/avatars"    # ← сюда скопировал данные
     nodeStageSecretRef:
       name: smb-media-secret
       namespace: default
