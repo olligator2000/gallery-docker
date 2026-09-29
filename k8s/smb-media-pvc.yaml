@@ -4,8 +4,9 @@ metadata:
   name: smb-media-pvc
 spec:
   accessModes:
-    - ReadWriteMany          # ← SMB даёт RWX, несколько подов могут читать/писать
+    - ReadWriteMany
   resources:
     requests:
-      storage: 10Gi          # ← размер "виртуальный", ограничивается самой шарой
+      storage: 10Gi
   storageClassName: smb-media
+  volumeName: smb-media-pv
