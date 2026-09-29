@@ -1,6 +1,8 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  annotations:
+    kubernetes.io/change-cause: "Build 20260929084454 (7a38af46968bde2445077cf3f99e0fa2efa5c776)"
   labels:
     io.kompose.service: web-production
   name: web-production
