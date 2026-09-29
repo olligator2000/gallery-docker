@@ -1,6 +1,8 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  annotations:
+    kubernetes.io/change-cause: "Build 20260929073510 (02907d30964383b4efa421829b947d37a20bfa78)"
   labels:
     io.kompose.service: web-staging
   name: web-staging
